@@ -1,0 +1,33 @@
+name: Build Win32 Calculator
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      - name: Set up MinGW
+        uses: egor-tensin/setup-mingw@v2
+        with:
+          platform: x64
+
+      - name: Create build directory
+        run: mkdir build
+
+      - name: Compile Win32 Calculator
+        run: g++ src/main.cpp -mwindows -O2 -o build/Win32Calculator.exe
+
+      - name: Upload Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: Win32Calculator
+          path: build/Win32Calculator.exe
