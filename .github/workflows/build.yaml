@@ -15,14 +15,14 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v3
 
-      - name: Set up MinGW
-        uses: egor-tensin/setup-mingw@v2
-        with:
-          platform: x64
+      - name: Install MinGW via Chocolatey
+        run: choco install mingw --no-progress -y
+
+      - name: Add MinGW to PATH
+        run: echo "C:\ProgramData\chocolatey\lib\mingw\tools\install\mingw64\bin" >> $GITHUB_PATH
 
       - name: Create build directory
-        run: |
-          if (-not (Test-Path "build")) { mkdir build }
+        run: mkdir build
 
       - name: Compile Win32 Calculator
         run: g++ src/main.cpp -mwindows -O2 -o build/Win32Calculator.exe
