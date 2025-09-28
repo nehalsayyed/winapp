@@ -21,7 +21,8 @@ jobs:
           platform: x64
 
       - name: Create build directory
-        run: mkdir build
+        run: |
+          if (-not (Test-Path "build")) { mkdir build }
 
       - name: Compile Win32 Calculator
         run: g++ src/main.cpp -mwindows -O2 -o build/Win32Calculator.exe
