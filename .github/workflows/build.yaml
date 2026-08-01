@@ -28,8 +28,9 @@ jobs:
         run: |
           mkdir -p www
           cp index.html www/
+          if [ -f "capacitor.config.json" ]; then cp capacitor.config.json www/; fi
 
-      # Step 2: Initialize NPM and Install Capacitor Dependencies
+      # Step 2: Initialize NPM and Install Capacitor
       - name: Install Capacitor CLI & Core
         run: |
           npm init -y
@@ -41,7 +42,20 @@ jobs:
           npx cap add android
           npx cap sync android
 
-      # Step 4: Fix Kotlin Duplicate Class Conflicts
+      # Step 4: FIX BLACK SCREEN - Allow HTTP Cleartext Traffic & Internet Permissions
+      - name: Configure Android Manifest (Allow HTTP Streams)
+        run: |
+          MANIFEST_PATH="android/app/src/main/AndroidManifest.xml"
+          
+          # Enable usesCleartextTraffic in application tag
+          sed -i 's/<application/<application android:usesCleartextTraffic="true"/g' $MANIFEST_PATH
+          
+          # Ensure Internet permission is explicit
+          if ! grep -q "android.permission.INTERNET" $MANIFEST_PATH; then
+            sed -i '/<manifest/a \    <uses-permission android:name="android.permission.INTERNET" \/>' $MANIFEST_PATH
+          fi
+
+      # Step 5: Fix Kotlin Duplicate Classes
       - name: Fix Kotlin Duplicate Classes
         run: |
           cat << 'EOF' >> android/app/build.gradle
@@ -54,7 +68,7 @@ jobs:
           }
           EOF
 
-      # Step 5: Inject Native Tweaks (Disable Text Selection Menu in MainActivity)
+      # Step 6: Inject Native Tweaks (Disable Text Selection Menu)
       - name: Customize MainActivity for Native Feel
         run: |
           MAIN_ACTIVITY_PATH="android/app/src/main/java/com/mycam/liveapp/MainActivity.java"
@@ -77,14 +91,14 @@ jobs:
           EOF
           fi
 
-      # Step 6: Build Debug APK using Gradle
+      # Step 7: Build Debug APK using Gradle
       - name: Build Android APK
         run: |
           cd android
           chmod +x gradlew
           ./gradlew assembleDebug
 
-      # Step 7: Upload Output APK as Workflow Artifact
+      # Step 8: Upload Output APK as Workflow Artifact
       - name: Upload APK Artifact
         uses: actions/upload-artifact@v4
         with:
