@@ -1,0 +1,8 @@
+{
+  "appId": "com.mycam.liveapp",
+  "appName": "Live Cam App",
+  "webDir": "www",
+  "android": {
+    "allowMixedContent": true
+  }
+}
