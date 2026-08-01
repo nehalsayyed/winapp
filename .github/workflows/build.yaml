@@ -1,1 +1,80 @@
+name: Build Capacitor Android APK
 
+on:
+  
+  workflow_dispatch:
+
+jobs:
+  build-android:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository code
+        uses: actions/checkout@v4
+
+      - name: Set up Java JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'zulu'
+          java-version: '17'
+
+      - name: Set up Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      # Step 1: Create www directory & copy source files
+      - name: Prepare Web Directory
+        run: |
+          mkdir -p www
+          cp index.html www/
+
+      # Step 2: Initialize NPM and Install Capacitor Dependencies
+      - name: Install Capacitor CLI & Core
+        run: |
+          npm init -y
+          npm install @capacitor/core @capacitor/cli @capacitor/android
+
+      # Step 3: Add Android Platform & Sync Web Assets
+      - name: Add Android & Sync
+        run: |
+          npx cap add android
+          npx cap sync android
+
+      # Step 4: Inject Native Tweaks (Disable Text Selection Menu in MainActivity)
+      - name: Customize MainActivity for Native Feel
+        run: |
+          MAIN_ACTIVITY_PATH="android/app/src/main/java/com/mycam/liveapp/MainActivity.java"
+          if [ -f "$MAIN_ACTIVITY_PATH" ]; then
+            cat << 'EOF' > $MAIN_ACTIVITY_PATH
+          package com.mycam.liveapp;
+
+          import android.view.ActionMode;
+          import android.view.Menu;
+          import com.getcapacitor.BridgeActivity;
+
+          public class MainActivity extends BridgeActivity {
+              @Override
+              public void onActionModeStarted(ActionMode mode) {
+                  Menu menu = mode.getMenu();
+                  menu.clear();
+                  super.onActionModeStarted(mode);
+              }
+          }
+          EOF
+          fi
+
+      # Step 5: Build Debug APK using Gradle
+      - name: Build Android APK
+        run: |
+          cd android
+          chmod +x gradlew
+          ./gradlew assembleDebug
+
+      # Step 6: Upload Output APK as Workflow Artifact
+      - name: Upload APK Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: live-cam-app-debug
+          path: android/app/build/outputs/apk/debug/app-debug.apk
+          
