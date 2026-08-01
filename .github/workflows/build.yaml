@@ -12,7 +12,7 @@ jobs:
       - name: Checkout repository code
         uses: actions/checkout@v4
 
-      - name: Set up Java JDK 17
+      - name: Set up Java JDK 21
         uses: actions/setup-java@v4
         with:
           distribution: 'zulu'
@@ -41,7 +41,20 @@ jobs:
           npx cap add android
           npx cap sync android
 
-      # Step 4: Inject Native Tweaks (Disable Text Selection Menu in MainActivity)
+      # Step 4: Fix Kotlin Duplicate Class Conflicts
+      - name: Fix Kotlin Duplicate Classes
+        run: |
+          cat << 'EOF' >> android/app/build.gradle
+
+          configurations.all {
+              resolutionStrategy {
+                  exclude group: "org.jetbrains.kotlin", module: "kotlin-stdlib-jdk8"
+                  exclude group: "org.jetbrains.kotlin", module: "kotlin-stdlib-jdk7"
+              }
+          }
+          EOF
+
+      # Step 5: Inject Native Tweaks (Disable Text Selection Menu in MainActivity)
       - name: Customize MainActivity for Native Feel
         run: |
           MAIN_ACTIVITY_PATH="android/app/src/main/java/com/mycam/liveapp/MainActivity.java"
@@ -64,14 +77,14 @@ jobs:
           EOF
           fi
 
-      # Step 5: Build Debug APK using Gradle
+      # Step 6: Build Debug APK using Gradle
       - name: Build Android APK
         run: |
           cd android
           chmod +x gradlew
           ./gradlew assembleDebug
 
-      # Step 6: Upload Output APK as Workflow Artifact
+      # Step 7: Upload Output APK as Workflow Artifact
       - name: Upload APK Artifact
         uses: actions/upload-artifact@v4
         with:
