@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>Live Cam App</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
+
+    <style>
+        /* 1. Disable text selection globally */
+        * {
+            -webkit-user-select: none !important;
+            -moz-user-select: none !important;
+            -ms-user-select: none !important;
+            user-select: none !important;
+            
+            /* Disable blue highlight overlay when tapping elements */
+            -webkit-tap-highlight-color: transparent !important;
+            
+            /* Disable image saving / callout popups on long press */
+            -webkit-touch-callout: none !important;
+        }
+
+        /* 2. Prevent pull-to-refresh & web bounce scroll effects */
+        html, body {
+            overscroll-behavior-y: none;
+            overflow: hidden;
+            touch-action: manipulation;
+            height: 100%;
+            width: 100%;
+            position: fixed; /* Lock viewport in place */
+        }
+
+        /* Re-enable text selection ONLY if you have actual input text fields */
+        input, textarea {
+            -webkit-user-select: text !important;
+            user-select: text !important;
+        }
+    </style>
+</head>
+<body class="bg-gray-950 text-white flex flex-col items-center justify-center">
+
+    <!-- Your App Code Here -->
+
+    <script>
+        // Disable context menu popups (Right click / Long press menu)
+        window.addEventListener('contextmenu', (e) => {
+            e.preventDefault();
+        });
+    </script>
+</body>
+</html>
