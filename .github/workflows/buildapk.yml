@@ -35,10 +35,13 @@ jobs:
           cd my-app
           npm install @capacitor/core @capacitor/android @capacitor/local-notifications
 
-      # 2. Add Capacitor Android Platform & Inject Code
+      # 2. Re-initialize Config, Add Android Platform & Inject Code
       - name: Inject Notification App Code & Sync
         run: |
           cd my-app
+          
+          # Delete auto-generated config to avoid cap init collision
+          rm -f capacitor.config.ts
           npx cap init "Ionic Notification App" "com.example.ionicnotification" --web-dir dist
 
           # Overwrite App.tsx with Native Notification logic
