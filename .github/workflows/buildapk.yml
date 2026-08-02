@@ -1,115 +1,240 @@
-name: Build Ionic Capacitor Notification APK
+name: Generate & Build ExoPlayer Compose App
 
 on:
+  
   workflow_dispatch:
 
 jobs:
-  build-apk:
-    runs-on: ubuntu-22.04
+  build:
+    name: Generate Project & Build APK
+    runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout Repository
-        uses: actions/checkout@v4
-
-      - name: Set up Java JDK
+      - name: Set up JDK 17
         uses: actions/setup-java@v4
         with:
+          java-version: '17'
           distribution: 'temurin'
-          java-version: '21'
 
-      - name: Set up Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '22'
-
-      - name: Setup Android SDK
-        uses: android-actions/setup-android@v3
-        with:
-          packages: 'platforms;android-34 build-tools;34.0.0'
-
-      # 1. Initialize Ionic + Capacitor App
-      - name: Scaffold Ionic App
+      # 1. Create Android Project Directory Structure
+      - name: Scaffold Project Structure
         run: |
-          npm install -g @ionic/cli
-          ionic start my-app blank --type=react --no-interactive --no-git
-          cd my-app
-          npm install @capacitor/core @capacitor/android @capacitor/local-notifications
+          mkdir -p app/src/main/java/com/example/streamer
+          mkdir -p app/src/main/res/values
 
-      # 2. Re-initialize Config, Add Android Platform & Inject Code
-      - name: Inject Notification App Code & Sync
+      # 2. Generate Root settings.gradle.kts
+      - name: Create settings.gradle.kts
         run: |
-          cd my-app
-          
-          # Delete auto-generated config to avoid cap init collision
-          rm -f capacitor.config.ts
-          npx cap init "Ionic Notification App" "com.example.ionicnotification" --web-dir dist
-
-          # Overwrite App.tsx with Native Notification logic
-          cat << 'EOF' > src/App.tsx
-          import React from 'react';
-          import { IonApp, IonContent, IonHeader, IonTitle, IonToolbar, IonButton } from '@ionic/react';
-          import { LocalNotifications } from '@capacitor/local-notifications';
-
-          /* Core CSS required for Ionic components to work properly */
-          import '@ionic/react/css/core.css';
-          import '@ionic/react/css/structure.css';
-          import '@ionic/react/css/typography.css';
-
-          const App: React.FC = () => {
-            const sendNotification = async () => {
-              // Request permissions
-              const perm = await LocalNotifications.requestPermissions();
-              if (perm.display === 'granted') {
-                // Schedule local notification
-                await LocalNotifications.schedule({
-                  notifications: [
-                    {
-                      title: "Capacitor Native Alert! 🚀",
-                      body: "Notification triggered natively from Ionic Capacitor!",
-                      id: 1,
-                      schedule: { at: new Date(Date.now() + 2000) }, // 2 seconds delay
-                    }
-                  ]
-                });
+          cat << 'EOF' > settings.gradle.kts
+          pluginManagement {
+              repositories {
+                  google()
+                  mavenCentral()
+                  gradlePluginPortal()
               }
-            };
-
-            return (
-              <IonApp>
-                <IonHeader>
-                  <IonToolbar color="dark">
-                    <IonTitle>Ionic Notification APK</IonTitle>
-                  </IonToolbar>
-                </IonHeader>
-                <IonContent className="ion-padding ion-text-center">
-                  <h2>Native Local Notifications</h2>
-                  <IonButton expand="block" onClick={sendNotification}>
-                    Trigger Notification (2s)
-                  </IonButton>
-                </IonContent>
-              </IonApp>
-            );
-          };
-
-          export default App;
+          }
+          dependencyResolutionManagement {
+              repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
+              repositories {
+                  google()
+                  mavenCentral()
+              }
+          }
+          rootProject.name = "ExoPlayerStreamer"
+          include(":app")
           EOF
 
-          # Build Web Dist Folder & Add Android Native Project
-          npm run build
-          npx cap add android
-          npx cap sync android
-
-      # 3. Build Debug APK with Gradle
-      - name: Build APK with Gradle
+      # 3. Generate Root build.gradle.kts
+      - name: Create Root build.gradle.kts
         run: |
-          cd my-app/android
-          chmod +x gradlew
-          ./gradlew assembleDebug --no-daemon
+          cat << 'EOF' > build.gradle.kts
+          plugins {
+              id("com.android.application") version "8.2.2" apply false
+              id("org.jetbrains.kotlin.android") version "1.9.22" apply false
+          }
+          EOF
 
-      # 4. Upload APK Artifact
-      - name: Upload APK Artifact
+      # 4. Generate App build.gradle.kts (With Media3 ExoPlayer & Compose)
+      - name: Create App build.gradle.kts
+        run: |
+          cat << 'EOF' > app/build.gradle.kts
+          plugins {
+              id("com.android.application")
+              id("org.jetbrains.kotlin.android")
+          }
+
+          android {
+              namespace = "com.example.streamer"
+              compileSdk = 34
+
+              defaultConfig {
+                  applicationId = "com.example.streamer"
+                  minSdk = 24
+                  targetSdk = 34
+                  versionCode = 1
+                  versionName = "1.0"
+              }
+
+              buildTypes {
+                  release {
+                      isMinifyEnabled = false
+                  }
+              }
+              compileOptions {
+                  sourceCompatibility = JavaVersion.VERSION_17
+                  targetCompatibility = JavaVersion.VERSION_17
+              }
+              kotlinOptions {
+                  jvmTarget = "17"
+              }
+              buildFeatures {
+                  compose = true
+              }
+              composeOptions {
+                  kotlinCompilerExtensionVersion = "1.5.8"
+              }
+          }
+
+          dependencies {
+              implementation("androidx.core:core-ktx:1.12.0")
+              implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.7.0")
+              implementation("androidx.activity:activity-compose:1.8.2")
+              implementation(platform("androidx.compose:compose-bom:2024.02.00"))
+              implementation("androidx.compose.ui:ui")
+              implementation("androidx.compose.material3:material3")
+
+              // Media3 / ExoPlayer Dependencies
+              implementation("androidx.media3:media3-exoplayer:1.2.1")
+              implementation("androidx.media3:media3-ui:1.2.1")
+              implementation("androidx.media3:media3-common:1.2.1")
+          }
+          EOF
+
+      # 5. Generate AndroidManifest.xml
+      - name: Create AndroidManifest.xml
+        run: |
+          cat << 'EOF' > app/src/main/AndroidManifest.xml
+          <?xml version="1.0" encoding="utf-8"?>
+          <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+              <uses-permission android:permission="android.permission.INTERNET" />
+
+              <application
+                  android:allowBackup="true"
+                  android:usesCleartextTraffic="true"
+                  android:label="ExoStreamer"
+                  android:theme="@android:style/Theme.Material.NoActionBar">
+                  <activity
+                      android:name=".MainActivity"
+                      android:exported="true">
+                      <intent-filter>
+                          <action android:name="android.intent.action.MAIN" />
+                          <category android:name="android.intent.category.LAUNCHER" />
+                      </intent-filter>
+                  </activity>
+              </application>
+          </manifest>
+          EOF
+
+      # 6. Generate MainActivity.kt (Compose + Media3 ExoPlayer)
+      - name: Create MainActivity.kt
+        run: |
+          cat << 'EOF' > app/src/main/java/com/example/streamer/MainActivity.kt
+          package com.example.streamer
+
+          import android.net.Uri
+          import android.os.Bundle
+          import androidx.activity.ComponentActivity
+          import androidx.activity.compose.setContent
+          import androidx.compose.foundation.layout.*
+          import androidx.compose.foundation.shape.RoundedCornerShape
+          import androidx.compose.material3.*
+          import androidx.compose.runtime.*
+          import androidx.compose.ui.Modifier
+          import androidx.compose.ui.draw.clip
+          import androidx.compose.ui.graphics.Color
+          import androidx.compose.ui.platform.LocalContext
+          import androidx.compose.ui.unit.dp
+          import androidx.compose.ui.viewinterop.AndroidView
+          import androidx.media3.common.MediaItem
+          import androidx.media3.exoplayer.ExoPlayer
+          import androidx.media3.ui.PlayerView
+
+          class MainActivity : ComponentActivity() {
+              override fun onCreate(savedInstanceState: Bundle?) {
+                  super.onCreate(savedInstanceState)
+                  setContent {
+                      MaterialTheme(colorScheme = darkColorScheme()) {
+                          Surface(
+                              modifier = Modifier.fillMaxSize(),
+                              color = Color(0xFF0A0C10)
+                          ) {
+                              ExoPlayerStreamScreen(
+                                  streamUrl = "http://173.13.181.58/axis-cgi/mjpg/video.cgi"
+                              )
+                          }
+                      }
+                  }
+              }
+          }
+
+          @Composable
+          fun ExoPlayerStreamScreen(streamUrl: String) {
+              val context = LocalContext.current
+
+              // Initialize ExoPlayer
+              val exoPlayer = remember {
+                  ExoPlayer.Builder(context).build().apply {
+                      val mediaItem = MediaItem.fromUri(Uri.parse(streamUrl))
+                      setMediaItem(mediaItem)
+                      prepare()
+                      playWhenReady = true
+                  }
+              }
+
+              DisposableEffect(Unit) {
+                  onDispose {
+                      exoPlayer.release()
+                  }
+              }
+
+              Box(
+                  modifier = Modifier
+                      .fillMaxSize()
+                      .padding(16.dp),
+                  contentAlignment = androidx.compose.ui.Alignment.Center
+              ) {
+                  Card(
+                      shape = RoundedCornerShape(20.dp),
+                      modifier = Modifier
+                          .fillMaxWidth()
+                          .aspectRatio(16f / 9f)
+                          .clip(RoundedCornerShape(20.dp))
+                  ) {
+                      AndroidView(
+                          factory = { ctx ->
+                              PlayerView(ctx).apply {
+                                  player = exoPlayer
+                                  useController = false
+                              }
+                          },
+                          modifier = Modifier.fillMaxSize()
+                      )
+                  }
+              }
+          }
+          EOF
+
+      # 7. Setup Gradle Wrapper & Build APK
+      - name: Setup Gradle & Build
+        run: |
+          gradle wrapper
+          ./gradlew assembleDebug --stacktrace
+
+      # 8. Upload Artifact
+      - name: Upload Debug APK
         uses: actions/upload-artifact@v4
         with:
-          name: IonicCapacitor-NotificationApp
-          path: my-app/android/app/build/outputs/apk/**/*.apk
-          
+          name: ExoPlayer-Streamer-APK
+          path: app/build/outputs/apk/debug/app-debug.apk
+          retention-days: 7
