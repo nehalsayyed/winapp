@@ -1,4 +1,4 @@
-name: Build Godot Android APK
+name: Build React Native Notification APK
 
 on:
   workflow_dispatch:
@@ -17,167 +17,110 @@ jobs:
           distribution: 'temurin'
           java-version: '17'
 
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
       - name: Setup Android SDK
         uses: android-actions/setup-android@v3
         with:
-          packages: 'platforms;android-33 build-tools;33.0.2 cmdline-tools;latest platform-tools'
+          packages: 'platforms;android-34 build-tools;34.0.0'
 
-      # 1. Download Godot Headless Engine & Export Templates
-      - name: Install Godot 4
+      # 1. Initialize React Native Expo App on the fly
+      - name: Scaffold React Native App
         run: |
-          GODOT_VERSION="4.2.2-stable"
-          
-          # Download Godot Engine
-          wget -q https://github.com/godotengine/godot/releases/download/${GODOT_VERSION}/Godot_v${GODOT_VERSION}_linux.x86_64.zip
-          unzip -q Godot_v${GODOT_VERSION}_linux.x86_64.zip
-          sudo mv Godot_v${GODOT_VERSION}_linux.x86_64 /usr/local/bin/godot
-          sudo chmod +x /usr/local/bin/godot
+          npx create-expo-app@latest my-app --template blank --no-install
+          cd my-app
+          npm install
+          npx expo install expo-notifications
 
-          # Download Export Templates
-          wget -q https://github.com/godotengine/godot/releases/download/${GODOT_VERSION}/Godot_v${GODOT_VERSION}_export_templates.tpz
-          
-          # Install Templates to ~/.local/share/godot/export_templates/4.2.2.stable
-          TEMPLATE_DIR="$HOME/.local/share/godot/export_templates/4.2.2.stable"
-          mkdir -p "$TEMPLATE_DIR"
-          unzip -q Godot_v${GODOT_VERSION}_export_templates.tpz
-          mv templates/* "$TEMPLATE_DIR/"
-
-      # 2. Generate Debug Keystore
-      - name: Generate Debug Keystore
+      # 2. Inject Code with Native Local Notifications
+      - name: Inject Notification App Code
         run: |
-          keytool -keyalg RSA -genkeypair -alias androiddebugkey -keypass android -keystore debug.keystore -storepass android -dname "CN=Android Debug,O=Android,C=US" -validity 9999
+          cat << 'EOF' > my-app/App.js
+          import React, { useEffect } from 'react';
+          import { StyleSheet, Text, View, Button, Alert, Platform } from 'react-native';
+          import * as Notifications from 'expo-notifications';
 
-      # 3. Configure Godot Editor Settings (CRITICAL STEP)
-      - name: Configure Godot Android Settings
-        run: |
-          SETTINGS_DIR="$HOME/.config/godot"
-          mkdir -p "$SETTINGS_DIR"
-          
-          # Write editor settings to inform Godot where Android SDK, ADB, and Java live
-          cat << EOF > "$SETTINGS_DIR/editor_settings-4.tres"
-          [resource]
-          export/android/android_sdk_path = "${ANDROID_HOME}"
-          export/android/debug_keystore = "${GITHUB_WORKSPACE}/debug.keystore"
-          export/android/debug_keystore_user = "androiddebugkey"
-          export/android/debug_keystore_pass = "android"
-          export/android/force_system_user = false
+          // Configure notification behavior
+          Notifications.setNotificationHandler({
+            handleNotification: async () => ({
+              shouldShowAlert: true,
+              shouldPlaySound: true,
+              shouldSetBadge: false,
+            }),
+          });
+
+          export default function App() {
+            useEffect(() => {
+              // Request notification permissions on startup
+              async function requestPermissions() {
+                const { status } = await Notifications.requestPermissionsAsync();
+                if (status !== 'granted') {
+                  Alert.alert('Permission needed', 'Please grant notification permissions!');
+                }
+              }
+              requestPermissions();
+            }, []);
+
+            async function triggerLocalNotification() {
+              await Notifications.scheduleNotificationAsync({
+                content: {
+                  title: "Native Notification! 🚀",
+                  body: "This notification was generated natively inside React Native.",
+                  data: { data: 'sample data' },
+                },
+                trigger: { seconds: 2 },
+              });
+            }
+
+            return (
+              <View style={styles.container}>
+                <Text style={styles.title}>React Native Native Notifications</Text>
+                <Button 
+                  title="Trigger Notification (2s delay)" 
+                  onPress={triggerLocalNotification} 
+                />
+              </View>
+            );
+          }
+
+          const styles = StyleSheet.create({
+            container: {
+              flex: 1,
+              backgroundColor: '#1e1e2e',
+              alignItems: 'center',
+              justifyContent: 'center',
+              padding: 20,
+            },
+            title: {
+              fontSize: 20,
+              color: '#cdd6f4',
+              marginBottom: 20,
+              textAlign: 'center',
+              fontWeight: 'bold',
+            },
+          });
           EOF
 
-      # 4. Create Project & Simple UI Scene
-      - name: Initialize Godot Project Files
+      # 3. Eject Native Android Project Code & Prebuild
+      - name: Generate Native Android Folder
         run: |
-          # Create project.godot
-          cat << 'EOF' > project.godot
-          config_version=5
+          cd my-app
+          npx expo prebuild --platform android --no-install
 
-          [application]
-          config/name="Godot CI App"
-          run/main_scene="res://Main.tscn"
-          config/features=PackedStringArray("4.2", "Forward Plus")
-
-          [display]
-          window/size/viewport_width=720
-          window/size/viewport_height=1280
-          window/stretch/mode="canvas_items"
-          EOF
-
-          # Create Main UI Scene
-          cat << 'EOF' > Main.tscn
-          [gd_scene type="PackedScene" load_steps=2 format=3]
-
-          [sub_resource type="GDScript" id="GDScript_main"]
-          script/source = "extends Control
-
-          func _on_button_pressed():
-          	\$CenterContainer/VBoxContainer/Label.text = \"Works like a charm!\"
-          "
-
-          [node name="Main" type="Control"]
-          layout_mode = 3
-          anchors_preset = 15
-          anchor_right = 1.0
-          anchor_bottom = 1.0
-          grow_horizontal = 2
-          grow_vertical = 2
-          script = SubResource("GDScript_main")
-
-          [node name="ColorRect" type="ColorRect" parent="."]
-          layout_mode = 1
-          anchors_preset = 15
-          anchor_right = 1.0
-          anchor_bottom = 1.0
-          grow_horizontal = 2
-          grow_vertical = 2
-          color = Color(0.117647, 0.117647, 0.180392, 1)
-
-          [node name="CenterContainer" type="CenterContainer" parent="."]
-          layout_mode = 1
-          anchors_preset = 15
-          anchor_right = 1.0
-          anchor_bottom = 1.0
-          grow_horizontal = 2
-          grow_vertical = 2
-
-          [node name="VBoxContainer" type="VBoxContainer" parent="CenterContainer"]
-          layout_mode = 2
-          theme_override_constants/separation = 20
-
-          [node name="Label" type="Label" parent="CenterContainer/VBoxContainer"]
-          layout_mode = 2
-          theme_override_font_sizes/font_size = 32
-          text = "Hello from Godot UI!"
-          horizontal_alignment = 1
-
-          [node name="Button" type="Button" parent="CenterContainer/VBoxContainer"]
-          custom_minimum_size = Vector2(200, 60)
-          layout_mode = 2
-          text = "Click Me"
-
-          [connection signal="pressed" from="CenterContainer/VBoxContainer/Button" to="." method="_on_button_pressed"]
-          EOF
-
-          # Create export_presets.cfg
-          cat << EOF > export_presets.cfg
-          [preset.0]
-          name="Android"
-          platform="Android"
-          runnable=true
-          dedicated_server=false
-          custom_features=""
-          export_filter="all_resources"
-          include_filter=""
-          exclude_filter=""
-          export_path="build/app.apk"
-          encryption_include_filters=""
-          encryption_exclude_filters=""
-          encrypt_pck=false
-          encrypt_directory=false
-
-          [preset.0.options]
-          custom_template/release=""
-          custom_template/debug=""
-          gradle_build/use_gradle_build=false
-          architectures/armeabi-v7a=false
-          architectures/arm64-v8a=true
-          architectures/x86=false
-          architectures/x86_64=false
-          package/unique_name="com.example.godotci"
-          package/name="Godot CI App"
-          package/signed=true
-          keystore/debug="$GITHUB_WORKSPACE/debug.keystore"
-          keystore/debug_user="androiddebugkey"
-          keystore/debug_password="android"
-          EOF
-
-      # 5. Build APK
-      - name: Build APK
+      # 4. Build Android APK via Gradle
+      - name: Build APK with Gradle
         run: |
-          mkdir -p build
-          godot --headless --export-debug "Android" build/app.apk
+          cd my-app/android
+          chmod +x gradlew
+          ./gradlew assembleRelease --no-daemon
 
-      # 6. Upload Artifact
-      - name: Upload APK
+      # 5. Output and Upload APK
+      - name: Upload APK Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: GodotApp-arm64-v8a
-          path: build/app.apk
+          name: ReactNative-NotificationApp
+          path: my-app/android/app/build/outputs/apk/release/app-release-unsigned.apk
+          
