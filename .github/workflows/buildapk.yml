@@ -1,4 +1,4 @@
-name: Build Android APK
+name: Build Rust Android APK
 
 on:
   workflow_dispatch:
@@ -20,51 +20,20 @@ jobs:
       - name: Setup Android NDK & SDK
         uses: android-actions/setup-android@v3
 
-      # 1. Install Host Qt (desktop Linux) for build tool binaries (rcc, moc, androiddeployqt)
-      - name: Install Host Qt
-        uses: jurplel/install-qt-action@v3
+      - name: Install Rust Toolchain
+        uses: dtolnay/rust-toolchain@stable
         with:
-          version: '6.6.2'
-          target: 'desktop'
-          dir: '${{ runner.temp }}/qt_host'
+          targets: aarch64-linux-android
 
-      # Save Host Qt path before installing Target Qt
-      - name: Set Host Qt Env
-        run: echo "QT_HOST_PATH=$QT_ROOT_DIR" >> $GITHUB_ENV
-
-      # 2. Install Target Qt for Android ARM64
-      - name: Install Target Android Qt
-        uses: jurplel/install-qt-action@v3
-        with:
-          version: '6.6.2'
-          target: 'android'
-          arch: 'android_arm64_v8a'
-          dir: '${{ runner.temp }}/qt_target'
-
-      - name: Configure CMake
-        run: |
-          cmake -B build \
-            -G "Ninja" \
-            -DCMAKE_PREFIX_PATH="$QT_ROOT_DIR" \
-            -DQT_HOST_PATH="$QT_HOST_PATH" \
-            -DCMAKE_TOOLCHAIN_FILE="$ANDROID_NDK_ROOT/build/cmake/android.toolchain.cmake" \
-            -DANDROID_ABI=arm64-v8a \
-            -DANDROID_PLATFORM=android-28 \
-            -DCMAKE_BUILD_TYPE=Release
+      - name: Install cargo-apk
+        run: cargo install cargo-apk
 
       - name: Build APK
-        run: |
-          cmake --build build --target appQtAndroidApp_prepare_apk_dir
-          cmake --build build --target appQtAndroidApp_make_apk
-
-      - name: Locate and Output APK
-        run: |
-          mkdir -p output_apk
-          find build -name "*.apk" -exec cp {} output_apk/ \;
+        run: cargo apk build --release
 
       - name: Upload APK Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: QtAndroidApp-arm64-v8a
-          path: output_apk/*.apk
+          name: RustApp-arm64-v8a
+          path: target/debug/apk/*.apk
           
