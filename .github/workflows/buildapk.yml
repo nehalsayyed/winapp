@@ -1,4 +1,4 @@
-name: Build React Native Notification APK
+name: Build Ionic Capacitor Notification APK
 
 on:
   workflow_dispatch:
@@ -27,100 +27,86 @@ jobs:
         with:
           packages: 'platforms;android-34 build-tools;34.0.0'
 
-      # 1. Initialize React Native Expo App on the fly
-      - name: Scaffold React Native App
+      # 1. Initialize Ionic + Capacitor App on the fly
+      - name: Scaffold Ionic App
         run: |
-          npx create-expo-app@latest my-app --template blank --no-install
+          npm install -g @ionic/cli
+          ionic start my-app blank --type=react --no-interactive --no-git
           cd my-app
-          npm install
-          npx expo install expo-notifications
+          npm install @capacitor/core @capacitor/android @capacitor/local-notifications
 
-      # 2. Inject Code with Native Local Notifications
-      - name: Inject Notification App Code
+      # 2. Add Capacitor Android Platform & Inject Code
+      - name: Inject Notification App Code & Sync
         run: |
-          cat << 'EOF' > my-app/App.js
-          import React, { useEffect } from 'react';
-          import { StyleSheet, Text, View, Button, Alert, Platform } from 'react-native';
-          import * as Notifications from 'expo-notifications';
+          cd my-app
+          npx cap init "Ionic Notification App" "com.example.ionicnotification" --web-dir dist
 
-          // Configure notification behavior
-          Notifications.setNotificationHandler({
-            handleNotification: async () => ({
-              shouldShowAlert: true,
-              shouldPlaySound: true,
-              shouldSetBadge: false,
-            }),
-          });
+          # Overwrite App.tsx with Native Notification logic
+          cat << 'EOF' > src/App.tsx
+          import React from 'react';
+          import { IonApp, IonContent, IonHeader, IonTitle, IonToolbar, IonButton } from '@ionic/react';
+          import { LocalNotifications } from '@capacitor/local-notifications';
 
-          export default function App() {
-            useEffect(() => {
-              // Request notification permissions on startup
-              async function requestPermissions() {
-                const { status } = await Notifications.requestPermissionsAsync();
-                if (status !== 'granted') {
-                  Alert.alert('Permission needed', 'Please grant notification permissions!');
-                }
+          /* Core CSS required for Ionic components to work properly */
+          import '@ionic/react/css/core.css';
+          import '@ionic/react/css/structure.css';
+          import '@ionic/react/css/typography.css';
+
+          const App: React.FC = () => {
+            const sendNotification = async () => {
+              // Request permissions
+              const perm = await LocalNotifications.requestPermissions();
+              if (perm.display === 'granted') {
+                // Schedule local notification
+                await LocalNotifications.schedule({
+                  notifications: [
+                    {
+                      title: "Capacitor Native Alert! 🚀",
+                      body: "Notification triggered natively from Ionic Capacitor!",
+                      id: 1,
+                      schedule: { at: new Date(Date.now() + 2000) }, // 2 seconds delay
+                    }
+                  ]
+                });
               }
-              requestPermissions();
-            }, []);
-
-            async function triggerLocalNotification() {
-              await Notifications.scheduleNotificationAsync({
-                content: {
-                  title: "Native Notification! 🚀",
-                  body: "This notification was generated natively inside React Native.",
-                  data: { data: 'sample data' },
-                },
-                trigger: { seconds: 2 },
-              });
-            }
+            };
 
             return (
-              <View style={styles.container}>
-                <Text style={styles.title}>React Native Native Notifications</Text>
-                <Button 
-                  title="Trigger Notification (2s delay)" 
-                  onPress={triggerLocalNotification} 
-                />
-              </View>
+              <IonApp>
+                <IonHeader>
+                  <IonToolbar color="dark">
+                    <IonTitle>Ionic Notification APK</IonTitle>
+                  </IonToolbar>
+                </IonHeader>
+                <IonContent className="ion-padding ion-text-center">
+                  <h2>Native Local Notifications</h2>
+                  <IonButton expand="block" onClick={sendNotification}>
+                    Trigger Notification (2s)
+                  </IonButton>
+                </IonContent>
+              </IonApp>
             );
-          }
+          };
 
-          const styles = StyleSheet.create({
-            container: {
-              flex: 1,
-              backgroundColor: '#1e1e2e',
-              alignItems: 'center',
-              justifyContent: 'center',
-              padding: 20,
-            },
-            title: {
-              fontSize: 20,
-              color: '#cdd6f4',
-              marginBottom: 20,
-              textAlign: 'center',
-              fontWeight: 'bold',
-            },
-          });
+          export default App;
           EOF
 
-      # 3. Eject Native Android Project Code & Prebuild
-      - name: Generate Native Android Folder
-        run: |
-          cd my-app
-          npx expo prebuild --platform android --no-install
+          # Build Web Dist Folder & Add Android Native Project
+          npm run build
+          npx cap add android
+          npx cap sync android
 
-      # 4. Build Android APK via Gradle
+      # 3. Build Debug APK with Gradle
       - name: Build APK with Gradle
         run: |
           cd my-app/android
           chmod +x gradlew
-          ./gradlew assembleRelease --no-daemon
+          ./gradlew assembleDebug --no-daemon
 
-      # 5. Output and Upload APK
+      # 4. Upload APK Artifact (Using wildcard to guarantee match)
       - name: Upload APK Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: ReactNative-NotificationApp
-          path: my-app/android/app/build/outputs/apk/release/app-release-unsigned.apk
+          name: IonicCapacitor-NotificationApp
+          path: my-app/android/app/build/outputs/apk/**/*.apk
           
